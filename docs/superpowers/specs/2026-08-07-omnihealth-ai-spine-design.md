@@ -264,27 +264,77 @@ pointing at any specific vendor's agent (see §6.4).
 
 ## 5. The v1 component catalog
 
-### 5.1 Components
+### 5.1 Composition: the Basic Catalog plus three
 
-| Component | Purpose |
-|---|---|
-| `MetricEntryCard` | One numeric value with unit and date. Serves weight, body fat, blood pressure, and any future scalar metric. |
-| `ConfirmationCard` | Approve-before-write. "Log 2 eggs, 140 kcal?" with explicit accept/reject. |
-| `MetricChart` | Trend line over a returned series. |
-| `ChoiceList` | Disambiguation. "Which of these four ingredients did you mean?" |
-| `SummaryCard` | Read-only formatted text plus key/value rows. |
+A2UI ships a Basic Catalog — `Column`, `Row`, `List`, `Card`, `Tabs`, `Divider`, `Modal`, `Text`,
+`Image`, `Icon`, `Video`, `AudioPlayer`, `Button`, `CheckBox`, `TextField`, `DateTimeInput`,
+`ChoicePicker`, `Slider`. **OmniHealth adopts all of it.** The agent composes freely from these.
 
-Deliberately excluded from v1: any free-form component, anything that renders agent-supplied markup
-or HTML as UI, and anything capable of triggering a write without a user tap.
+An earlier draft of this spec defined five custom components. Four of them turned out to be
+compositions the Basic Catalog already expresses (a confirmation is a `Card` with `Text` and two
+`Button`s; a disambiguation list is a `List` with a `ChoicePicker`). Only three components are
+genuinely ours:
 
-### 5.2 How A2UI is delivered
+| Component | Direction | Why it exists |
+|---|---|---|
+| `MetricChart` | read | The Basic Catalog has no chart primitive, and trend lines are the single most valuable read in a health app. Backed by `fl_chart`, already a wger dependency. |
+| `MetricEntryCard` | write | Gathers and commits one scalar metric — value, unit, date — in a single tap. The most common interaction in the app deserves a one-shot path. |
+| `ConfirmationCard` | write | Commits whatever the primitives gathered. "Log 2 eggs, 140 kcal?" with accept and reject. |
 
-A2UI documents arrive as a **tool call** — `render_ui` — in both backends. This is the design's main
-simplification: it makes generative UI work identically whether the local Dart loop or an external
-ACP agent produced it, and requires no special content-block handling in the ACP path.
+The working division: **primitives gather, OmniHealth components commit.** The agent can build a meal
+builder out of `List`, `ChoicePicker`, and `Slider`, watch the running total update through the data
+model, and then hand the result to a `ConfirmationCard` to write.
+
+### 5.2 The write rule, and where the boundary actually is
+
+Basic Catalog components may carry local actions (`openUrl` and similar) and may invoke **read**
+tools. They may not produce writes.
+
+The mechanism is unchanged from §6.2 and is worth stating precisely, because it is easy to
+misattribute:
+
+- **The security boundary is the tool registry.** It refuses any write-capable tool lacking a valid
+  confirmation token. This holds no matter what the agent renders. If the agent puts a write intent
+  on a raw `Button`, the write is rejected for want of a token — the component itself proves nothing.
+- **The custom write components exist for honesty, not security.** A2UI would happily let an agent
+  render a `Button` labelled *Cancel* whose action commits a weight entry. Nothing in the protocol
+  prevents that. `MetricEntryCard` and `ConfirmationCard` prevent it structurally: they render their
+  own affordances, and the agent supplies only the content.
+
+The honesty guarantee is specific: **a write component renders the resolved arguments it is about to
+commit, and mints its token over exactly those resolved values.** The user sees the payload because
+the payload *is* the label. An agent cannot show one number and write another — the token would fail
+the argument-digest check in §6.2.
+
+Still excluded: anything rendering agent-supplied HTML or markup as UI, and any path from model
+output to a write that does not pass through a rendered, tapped, honestly-labelled control.
+
+### 5.3 How A2UI is delivered, and one deliberate deviation
+
+A2UI documents arrive as a **tool call** — `render_ui` — in both backends. This makes generative UI
+work identically whether the local Dart loop or an external ACP agent produced it, and requires no
+special content-block handling in the ACP path.
 
 `render_ui` accepts an A2UI document, renders it, and **suspends until the user acts**. The user's
-interaction (submitted values, or a dismissal) becomes the tool result returned to the agent.
+interaction becomes the tool result returned to the agent.
+
+This is a deviation, recorded here so it is not later mistaken for a misunderstanding. A2UI's native
+model is an event flow: the surface renders, the user interacts, the client emits a `userAction`
+message. Request/response is not its shape. We adopt suspend-and-return because it composes with a
+tool-calling loop far more simply, and because it works unchanged across both backends — an external
+ACP agent has no access to our Dart completers, but it can call a blocking MCP tool. A2UI v1.0 adds
+`actionResponse`, a client-to-server RPC, which is broadly this idea formalised; revisit the
+deviation when adopting v1.0.
+
+### 5.4 Data binding
+
+Component properties take either a literal or a JSON Pointer path (`{"text": {"path": "/user/name"}}`),
+and input components bind two-way: a `TextField` bound to `/form/weight` writes the user's typing
+back into the surface's data model with no agent round-trip. Structure is described once; state lives
+in the data model and updates through `updateDataModel`.
+
+This is what makes live-computed forms possible — a macro total that updates as portions change —
+and it is why the agent does not need to re-render a surface to reflect user input.
 
 ---
 

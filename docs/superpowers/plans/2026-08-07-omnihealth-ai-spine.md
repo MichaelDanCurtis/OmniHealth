@@ -2629,7 +2629,15 @@ Same shape. Tests assert: the summary text renders; tapping accept fires `onAcce
 
 - [ ] **Step 7: Wire the catalog using the real genui API from Step 1**
 
-Create `omni_catalog.dart` registering both components. Add a test asserting the catalog contains exactly the expected component names and that an unregistered name is absent — this is the security boundary, so it gets an explicit test.
+Create `omni_catalog.dart` composing **A2UI's Basic Catalog plus OmniHealth's own components**. Per spec §5.1 we adopt the Basic Catalog wholesale (`Column`, `Row`, `List`, `Card`, `Tabs`, `Divider`, `Modal`, `Text`, `Image`, `Icon`, `Video`, `AudioPlayer`, `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `ChoicePicker`, `Slider`) — genui provides it, so this is registration, not implementation.
+
+Add `OmniCatalog.writeComponents`, a constant set naming only the components permitted to mint confirmation tokens. After this task it contains `MetricEntryCard` and `ConfirmationCard`.
+
+Catalog tests must assert:
+- The Basic Catalog components resolve
+- `MetricEntryCard` and `ConfirmationCard` resolve
+- A name in neither set does **not** resolve
+- `writeComponents` contains exactly `{MetricEntryCard, ConfirmationCard}` — this set is what Task 12 keys token minting off, so it gets its own explicit test
 
 - [ ] **Step 8: Analyze and commit**
 
@@ -2641,49 +2649,121 @@ git commit -m "feat(ai): add A2UI catalog with metric entry and confirmation car
 
 ---
 
-## Task 11: Remaining catalog components
+## Task 11: MetricChart
+
+The one component A2UI's Basic Catalog genuinely lacks. `ChoiceList` and `SummaryCard` were dropped from an earlier draft of this plan — `List` + `ChoicePicker` and `Card` + `Column` + `Text` already express them (spec §5.1).
 
 **Files:**
-- Create: `lib/features/ai/genui/widgets/metric_chart.dart` (uses `fl_chart`, already a dependency)
-- Create: `lib/features/ai/genui/widgets/choice_list.dart`
-- Create: `lib/features/ai/genui/widgets/summary_card.dart`
-- Test: one file per widget under `test/features/ai/genui/widgets/`
-- Modify: `lib/features/ai/genui/omni_catalog.dart` — register all three
+- Create: `lib/features/ai/genui/widgets/metric_chart.dart`
+- Test: `test/features/ai/genui/widgets/metric_chart_test.dart`
+- Modify: `lib/features/ai/genui/omni_catalog.dart` — register it as a **read** component
 
 **Interfaces:**
-- Consumes: nothing beyond Flutter and `fl_chart`
-- Produces: `MetricChart({series, unit})`, `ChoiceList({options, onSelect, onDismiss})`, `SummaryCard({title, rows})`
+- Consumes: `fl_chart` (already a wger dependency — do not add a charting package)
+- Produces: `MetricChart({required List<MetricPoint> series, required String unit, String? label})`; `MetricPoint({required DateTime date, required double value})`
 
-All three are read-only or selection-only. None mints a confirmation token; none can trigger a write.
+Read-only. Not in `writeComponents`; mints no token; has no interactive control that could commit anything.
 
-- [ ] **Step 1: Write failing tests for all three**
+- [ ] **Step 1: Write the failing test**
 
-Assert per widget: renders its content; an empty series/options list renders an empty state rather than throwing; `ChoiceList` reports the selected option's id exactly once and reports dismissal separately; `SummaryCard` renders every provided row.
+```dart
+// test/features/ai/genui/widgets/metric_chart_test.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:wger/features/ai/genui/widgets/metric_chart.dart';
 
-- [ ] **Step 2: Run tests to verify they fail**
+Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-Run: `flutter test test/features/ai/genui/widgets/`
-Expected: FAIL — the three files do not exist
+void main() {
+  testWidgets('renders a label and unit', (tester) async {
+    await tester.pumpWidget(_host(MetricChart(
+      label: 'Weight',
+      unit: 'kg',
+      series: [
+        MetricPoint(date: DateTime(2026, 8, 1), value: 83.0),
+        MetricPoint(date: DateTime(2026, 8, 7), value: 82.4),
+      ],
+    )));
 
-- [ ] **Step 3: Implement the three widgets**
+    expect(find.textContaining('Weight'), findsWidgets);
+    expect(find.textContaining('kg'), findsWidgets);
+  });
 
-Follow `MetricEntryCard`'s structure: stable `Key`s on interactive controls, no network access, no repository access, all data passed in.
+  testWidgets('an empty series renders an empty state, not an exception', (tester) async {
+    await tester.pumpWidget(_host(const MetricChart(series: [], unit: 'kg')));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('No data'), findsOneWidget);
+  });
+
+  testWidgets('a single point renders without throwing', (tester) async {
+    // A one-point series has zero range on both axes — a classic divide-by-zero
+    // in chart libraries.
+    await tester.pumpWidget(_host(MetricChart(
+      unit: 'kg',
+      series: [MetricPoint(date: DateTime(2026, 8, 7), value: 82.4)],
+    )));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a flat series renders without throwing', (tester) async {
+    // Identical values means zero y-range; same failure mode as above.
+    await tester.pumpWidget(_host(MetricChart(
+      unit: 'kg',
+      series: [
+        MetricPoint(date: DateTime(2026, 8, 1), value: 82.0),
+        MetricPoint(date: DateTime(2026, 8, 7), value: 82.0),
+      ],
+    )));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('points are plotted in date order regardless of input order', (tester) async {
+    final chart = MetricChart(
+      unit: 'kg',
+      series: [
+        MetricPoint(date: DateTime(2026, 8, 7), value: 82.4),
+        MetricPoint(date: DateTime(2026, 8, 1), value: 83.0),
+      ],
+    );
+    await tester.pumpWidget(_host(chart));
+    await tester.pump();
+
+    expect(chart.sortedSeries.first.date, DateTime(2026, 8, 1));
+    expect(tester.takeException(), isNull);
+  });
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `flutter test test/features/ai/genui/widgets/metric_chart_test.dart`
+Expected: FAIL — `metric_chart.dart` does not exist
+
+- [ ] **Step 3: Implement**
+
+Use `fl_chart`'s `LineChart`. Expose `sortedSeries` as a getter so ordering is testable without reaching into the chart's internals. Guard the zero-range cases explicitly: when `series` is empty render an empty state; when min and max coincide on either axis, pad the range rather than passing a zero interval to `fl_chart`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `flutter test test/features/ai/genui/widgets/`
-Expected: PASS
+Run: `flutter test test/features/ai/genui/widgets/metric_chart_test.dart`
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Register in the catalog and update its test**
 
-The catalog test must now assert exactly five component names and still assert that an unregistered name is absent.
+`MetricChart` joins the catalog as a read component. Assert it resolves, and assert `writeComponents` still contains exactly `{MetricEntryCard, ConfirmationCard}` — adding a read component must not widen the write surface.
 
 - [ ] **Step 6: Analyze and commit**
 
 ```bash
 flutter analyze
 git add lib/features/ai/genui/ test/features/ai/genui/
-git commit -m "feat(ai): add chart, choice list and summary catalog components"
+git commit -m "feat(ai): add MetricChart, the one component the Basic Catalog lacks"
 ```
 
 ---
@@ -2697,10 +2777,16 @@ The bridge between the agent and the catalog, and the only place confirmation to
 - Test: `test/features/ai/genui/render_ui_tool_test.dart`
 
 **Interfaces:**
-- Consumes: `Tool`, `ToolResult` (Task 6); `ConfirmationTokenService` (Task 5); `OmniCatalog` (Task 10)
-- Produces: `RenderUiTool(catalog, tokenService, surfaceSink)`; `SurfaceRequest(component, props, completer)`
+- Consumes: `Tool`, `ToolResult` (Task 6); `ConfirmationTokenService` (Task 5); `OmniCatalog` including `writeComponents` (Tasks 10–11)
+- Produces: `RenderUiTool(tokenService, catalog, surfaceSink)`; `SurfaceRequest(component, props, completer)`
 
-`render_ui` suspends until the user acts. On submit it mints a token bound to the *intended write tool and arguments* and returns it alongside the submitted values. On dismissal it returns `{action: 'dismissed'}` and mints nothing.
+`render_ui` suspends until the user acts. Three rules, in order:
+
+1. The root component must resolve in the catalog (Basic Catalog or OmniHealth's own), else error.
+2. A token is minted **only** when the component is in `OmniCatalog.writeComponents` **and** an `intent` naming a tool and arguments was declared.
+3. Dismissal mints nothing, ever.
+
+Rule 2 is the executable form of spec §5.2: a `Button` from the Basic Catalog can declare whatever intent it likes and still gets no token, so the registry rejects the write. The security boundary is the registry; this rule is what keeps the honesty guarantee intact alongside it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2720,7 +2806,12 @@ void main() {
     surfaced = [];
     tool = RenderUiTool(
       tokenService: tokens,
-      allowedComponents: const {'MetricEntryCard', 'ConfirmationCard'},
+      // Basic Catalog names plus OmniHealth's own.
+      knownComponents: const {
+        'Column', 'Row', 'Card', 'Text', 'Button', 'TextField', 'Slider',
+        'MetricChart', 'MetricEntryCard', 'ConfirmationCard',
+      },
+      writeComponents: const {'MetricEntryCard', 'ConfirmationCard'},
       surfaceSink: surfaced.add,
     );
   });
@@ -2737,6 +2828,33 @@ void main() {
     expect(result.isError, isTrue);
     expect(result.message, contains('ArbitraryHtml'));
     expect(surfaced, isEmpty);
+  });
+
+  test('accepts a Basic Catalog component', () async {
+    final future = tool.call({
+      'component': 'Card',
+      'props': <String, dynamic>{},
+    });
+    await Future<void>.delayed(Duration.zero);
+    surfaced.single.dismiss();
+    expect((await future).isError, isFalse);
+  });
+
+  test('a Basic Catalog component mints no token even when it declares an intent', () async {
+    // The case spec 5.2 exists to prevent: an agent putting a write intent on a
+    // raw Button and labelling it however it likes.
+    final future = tool.call({
+      'component': 'Button',
+      'props': {'text': 'Cancel'},
+      'intent': {'tool': 'log_weight', 'arguments': {'value': 999.0}},
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    surfaced.single.complete({'tapped': true});
+
+    final data = (await future).data as Map<String, dynamic>;
+    expect(data['action'], 'submit');
+    expect(data.containsKey('confirmationToken'), isFalse);
   });
 
   test('submitting returns values plus a token valid for the intended write', () async {
@@ -2806,12 +2924,14 @@ Expected: FAIL — `render_ui_tool.dart` does not exist
 
 - [ ] **Step 3: Implement**
 
-Key points: validate `component` against `allowedComponents` before surfacing anything; hold a `Completer` per request; mint a token **only** on submit **and** only when `intent` names a tool and arguments; never mint on dismissal.
+Key points: validate `component` against `knownComponents` before surfacing anything; hold a `Completer` per request; mint a token **only** on submit, **only** when `intent` names a tool and arguments, **and only** when the component is in `writeComponents`; never mint on dismissal.
+
+Mint over the *resolved* argument values, not the declared template — spec §5.2's honesty guarantee requires the token to cover exactly what the user saw. If `intent.arguments` contains data-model paths, resolve them against the submitted values first, and use the resolved map for both the token and the returned payload.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `flutter test test/features/ai/genui/render_ui_tool_test.dart`
-Expected: PASS (5 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Analyze and commit**
 
@@ -3028,16 +3148,24 @@ Drive the full §6.1 flow against an in-memory Drift database and a scripted pro
 
 Same setup, but the scripted provider skips `render_ui` and calls `log_weight` directly with a fabricated token. Assert: no `WeightEntry` is written, and the transcript shows the agent being told to confirm first. **This test is the executable statement of the core invariant** — if it ever goes green while a write lands, the safety model is broken.
 
-- [ ] **Step 4: Run the acceptance tests**
+- [ ] **Step 4: Add the mislabelled-button acceptance test**
+
+The end-to-end form of spec §5.2. The scripted provider renders a raw Basic Catalog `Button` labelled **Cancel**, carrying `intent: {tool: 'log_weight', arguments: {value: 999.0}}`. Tap it.
+
+Assert: no token was minted, the `log_weight` call is rejected by the registry, **no `WeightEntry` of 999.0 exists in the database**, and the transcript shows the agent being told to render a confirmation.
+
+Together with Step 3 this pins both halves of the safety model: Step 3 proves a fabricated token fails, and this proves the agent cannot obtain a real one by dressing a write up as something else.
+
+- [ ] **Step 5: Run the acceptance tests**
 
 Run: `flutter test integration_test/ai_weight_flow_test.dart`
-Expected: PASS (2 tests)
+Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add integration_test/ test/features/ai/support/
-git commit -m "test(ai): add weight-entry acceptance tests incl. write-gate negative case"
+git commit -m "test(ai): add weight-entry acceptance tests incl. both write-gate negatives"
 ```
 
 ---
@@ -3148,7 +3276,7 @@ git commit -m "feat(ai): add desktop ACP agent backend over JSON-RPC stdio"
 
 ## Self-Review
 
-**Spec coverage.** §3 architecture → Tasks 1–18 file structure. §3.1 two-backend split → Tasks 9, 18. §4.1 providers → Tasks 1–3. §4.2 key store → Task 4. §4.3 tool registry → Tasks 6–8. §4.4 agent loop → Task 9. §4.5 A2UI surface → Tasks 10–12. §4.6 MCP bridge → Task 17. §4.7 ACP backend → Task 18. §5.1 catalog → Tasks 10–11. §5.2 render_ui → Task 12. §6.1 reference flow → Task 16. §6.2 confirmation tokens → Tasks 5, 6, 12, 16 step 3. §6.3 egress notice → Task 13 step 4. §6.4 ACP policy → Task 13 step 4, Task 3 doc comment. §7 error handling → Task 2 (provider errors), Task 6 (tool errors), Task 14 step 3 (malformed A2UI), Tasks 9 and 18 (cancellation, subprocess failure). §8 testing → every task.
+**Spec coverage.** §3 architecture → Tasks 1–18 file structure. §3.1 two-backend split → Tasks 9, 18. §4.1 providers → Tasks 1–3. §4.2 key store → Task 4. §4.3 tool registry → Tasks 6–8. §4.4 agent loop → Task 9. §4.5 A2UI surface → Tasks 10–12. §4.6 MCP bridge → Task 17. §4.7 ACP backend → Task 18. §5.1 catalog composition → Tasks 10–11. §5.2 write rule and honesty guarantee → Task 10 step 7 (`writeComponents`), Task 12 rule 2, Task 16 step 4. §5.3 render_ui and the suspend-and-return deviation → Task 12. §5.4 data binding → Task 12 step 3 (resolving paths before minting). §6.1 reference flow → Task 16. §6.2 confirmation tokens → Tasks 5, 6, 12, 16 step 3. §6.3 egress notice → Task 13 step 4. §6.4 ACP policy → Task 13 step 4, Task 3 doc comment. §7 error handling → Task 2 (provider errors), Task 6 (tool errors), Task 14 step 3 (malformed A2UI), Tasks 9 and 18 (cancellation, subprocess failure). §8 testing → every task.
 
 **Known gaps, deliberate.** Spec §7's "in-flight tool calls complete or roll back" is only partially covered: Task 9 tests that cancellation stops the loop, but rollback of a partially-applied write is not implemented, because every Slice 1 write is a single Drift insert and therefore already atomic. Revisit when a tool performs multiple writes.
 
