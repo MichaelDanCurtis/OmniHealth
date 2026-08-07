@@ -11,6 +11,14 @@
 **Spec:** [2026-08-07-omnihealth-ai-spine-design.md](../specs/2026-08-07-omnihealth-ai-spine-design.md)
 **Spike findings:** [2026-08-07-slice-0-findings.md](../specs/2026-08-07-slice-0-findings.md)
 
+## Progress
+
+| Task | Status |
+|---|---|
+| 0 — Establish the fork | **Done** — `8732988`. Analyze clean, macOS + iOS build. |
+| 1 — Provider contract + guard test | **Done** — 6 tests pass, analyze clean. |
+| 2–18 | Not started |
+
 ## Global Constraints
 
 - **Every new file begins with the AGPL header block** copied verbatim from any existing wger source file (see `lib/core/network/secure_token_storage.dart` lines 1–17), with the copyright line reading `Copyright (c) 2026, OmniHealth contributors`.
@@ -69,6 +77,72 @@ lib/features/ai/
 ```
 
 **Boundaries.** `providers/` knows HTTP but not tools or widgets. `tools/` knows repositories but not providers or widgets. `agent/` knows providers and tools but not widgets. `genui/` knows widgets and the token service but not providers. This keeps each unit testable with a fake for everything it depends on.
+
+---
+
+## Task 0: Establish the fork
+
+Every later task assumes wger's source tree is present in this repository. Nothing has put it there
+yet. This task does, in a way that keeps pulling upstream cheap.
+
+**Files:**
+- Create: the whole `wger-project/flutter` tree at the repository root
+- Create: `README.md` — what OmniHealth is and what it forked
+- Modify: `.gitignore` — add Flutter's ignores
+
+**Interfaces:**
+- Consumes: nothing
+- Produces: a buildable Flutter app at the repository root, with `upstream` configured
+
+- [ ] **Step 1: Add upstream as a remote and fetch it**
+
+```bash
+git remote add upstream https://github.com/wger-project/flutter.git
+git fetch upstream --depth 50
+```
+
+Using a remote rather than copying files is what makes `git merge upstream/master` work later. This
+is the whole reason the module boundary exists — do not skip it in favour of copying the tree.
+
+- [ ] **Step 2: Merge upstream's tree into this repository**
+
+```bash
+git merge --allow-unrelated-histories --no-edit upstream/master
+```
+
+Expected: the merge succeeds. The only file that can conflict is `.gitignore`; if it does, keep
+both sets of rules.
+
+- [ ] **Step 3: Verify the tree arrived intact**
+
+```bash
+ls lib/features/          # account auth exercises gallery measurements nutrition routines trophies weight
+flutter pub get
+flutter analyze
+```
+Expected: `pub get` clean, `flutter analyze` reports **No issues found**. That zero-issue result is
+the baseline every later task must preserve.
+
+- [ ] **Step 4: Confirm it builds**
+
+```bash
+flutter build macos --debug
+```
+Expected: `✓ Built build/macos/Build/Products/Debug/wger.app`
+
+- [ ] **Step 5: Write the README**
+
+State plainly: OmniHealth is an AGPL-3.0+ fork of wger-project/flutter; the AI layer lives entirely
+in `lib/features/ai/`; upstream is tracked as the `upstream` remote. Include the §6.4 policy — that
+OmniHealth supports provider API keys only, and does not support subscription credentials from any
+vendor.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add README.md .gitignore
+git commit -m "chore: fork wger-project/flutter as the OmniHealth base"
+```
 
 ---
 
