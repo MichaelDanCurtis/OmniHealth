@@ -1942,17 +1942,21 @@ git commit -m "feat(ai): add weight read/write tools over wger repositories"
 
 ---
 
-## Task 8: Nutrition, workout, and measurement tools
+## Task 8: Nutrition, workout, measurement, and exercise tools
 
 **Files:**
 - Create: `lib/features/ai/tools/wger/nutrition_tools.dart`
 - Create: `lib/features/ai/tools/wger/body_tools.dart`
+- Create: `lib/features/ai/tools/wger/exercise_tools.dart`
 - Test: `test/features/ai/tools/wger/nutrition_tools_test.dart`
 - Test: `test/features/ai/tools/wger/body_tools_test.dart`
+- Test: `test/features/ai/tools/wger/exercise_tools_test.dart`
 
 **Interfaces:**
 - Consumes: `Tool`, `ToolResult` (Task 6)
-- Produces: `GetNutritionLogTool`, `SearchIngredientTool`, `LogNutritionEntryTool`, `GetWorkoutLogTool`, `GetBodyMeasurementsTool`
+- Produces: `GetNutritionLogTool`, `SearchIngredientTool`, `LogNutritionEntryTool`, `GetWorkoutLogTool`, `GetBodyMeasurementsTool`, `SearchExercisesTool`, `GetExerciseDetailTool`
+
+The two exercise tools are what make the `ExerciseVideo` component (Task 11) reachable: the agent searches for a lift, gets back video **ids**, and renders one. Per spec §5.5 these tools return ids and never URLs — no tool result may contain a media URL, because anything the agent sees it can put in its next render request.
 
 - [ ] **Step 1: Read the existing repositories**
 
@@ -1988,12 +1992,38 @@ Expected: PASS
 
 `GetWorkoutLogTool` and `GetBodyMeasurementsTool` are both reads, so neither declares a confirmation token. Both accept an optional `limit` and an optional `since` date string, and both return an empty list as a success.
 
-- [ ] **Step 7: Analyze and commit**
+- [ ] **Step 7: Repeat Steps 2–5 for `exercise_tools.dart`**
+
+Read `lib/features/exercises/providers/exercise_repository.dart` first — it exposes `searchExerciseServer(...)` and `watchAllDrift()` returning an `ExerciseState`. The `Exercise` model already carries `List<Video> videos`.
+
+- `SearchExercisesTool` — `{query, limit?}` → `[{id, name, category, equipment, hasVideo}]`. Empty results is a success. A blank query is an error rather than an unbounded scan.
+- `GetExerciseDetailTool` — `{id}` → `{name, description, muscles, equipment, videos: [{id, durationSeconds}], license: {title, author}}`. An unknown id is an error, not an empty object.
+
+**Two assertions this task exists to pin**, both from spec §5.5:
+
+```dart
+test('exercise results expose video ids, never media URLs', () async {
+  final result = await GetExerciseDetailTool(load: fake.load).call({'id': 1});
+  final encoded = jsonEncode(result.data);
+  expect(encoded, contains('"id"'));
+  // Anything URL-shaped in a tool result is a URL the agent can echo into a
+  // render request. Media resolution belongs client-side, in the component.
+  expect(encoded, isNot(contains('http')));
+  expect(encoded, isNot(contains('/media/')));
+});
+
+test('search results expose hasVideo as a flag, not a link', () async {
+  final result = await SearchExercisesTool(search: fake.search).call({'query': 'deadlift'});
+  expect(jsonEncode(result.data), isNot(contains('http')));
+});
+```
+
+- [ ] **Step 8: Analyze and commit**
 
 ```bash
 flutter analyze
 git add lib/features/ai/tools/wger/ test/features/ai/tools/wger/
-git commit -m "feat(ai): add nutrition, workout and measurement tools"
+git commit -m "feat(ai): add nutrition, workout, measurement and exercise tools"
 ```
 
 ---
@@ -2649,18 +2679,20 @@ git commit -m "feat(ai): add A2UI catalog with metric entry and confirmation car
 
 ---
 
-## Task 11: MetricChart
+## Task 11: MetricChart and ExerciseVideo
 
-The one component A2UI's Basic Catalog genuinely lacks. `ChoiceList` and `SummaryCard` were dropped from an earlier draft of this plan — `List` + `ChoicePicker` and `Card` + `Column` + `Text` already express them (spec §5.1).
+The two read components the adopted Basic Catalog cannot supply — one because it has no chart primitive, one because its `Video` takes a URL and §5.5 forbids that. `ChoiceList` and `SummaryCard` were dropped from an earlier draft — `List` + `ChoicePicker` and `Card` + `Column` + `Text` already express them (spec §5.1).
 
 **Files:**
 - Create: `lib/features/ai/genui/widgets/metric_chart.dart`
+- Create: `lib/features/ai/genui/widgets/exercise_video.dart`
 - Test: `test/features/ai/genui/widgets/metric_chart_test.dart`
-- Modify: `lib/features/ai/genui/omni_catalog.dart` — register it as a **read** component
+- Test: `test/features/ai/genui/widgets/exercise_video_test.dart`
+- Modify: `lib/features/ai/genui/omni_catalog.dart` — register both as **read** components
 
 **Interfaces:**
-- Consumes: `fl_chart` (already a wger dependency — do not add a charting package)
-- Produces: `MetricChart({required List<MetricPoint> series, required String unit, String? label})`; `MetricPoint({required DateTime date, required double value})`
+- Consumes: `fl_chart` and wger's existing `ExerciseVideoWidget` + `mediaUrlBuilderProvider` (all already present — add no packages)
+- Produces: `MetricChart({required List<MetricPoint> series, required String unit, String? label})`; `MetricPoint({required DateTime date, required double value})`; `ExerciseVideo({required int videoId})`
 
 Read-only. Not in `writeComponents`; mints no token; has no interactive control that could commit anything.
 
@@ -2754,16 +2786,81 @@ Use `fl_chart`'s `LineChart`. Expose `sortedSeries` as a getter so ordering is t
 Run: `flutter test test/features/ai/genui/widgets/metric_chart_test.dart`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Register in the catalog and update its test**
+- [ ] **Step 5: Register MetricChart in the catalog**
 
-`MetricChart` joins the catalog as a read component. Assert it resolves, and assert `writeComponents` still contains exactly `{MetricEntryCard, ConfirmationCard}` — adding a read component must not widen the write surface.
+Assert it resolves, and assert `writeComponents` still contains exactly `{MetricEntryCard, ConfirmationCard}` — adding a read component must not widen the write surface.
 
-- [ ] **Step 6: Analyze and commit**
+- [ ] **Step 6: Read wger's existing video widget**
+
+Read `lib/features/exercises/widgets/videos.dart` and `lib/features/exercises/models/video.dart`. `ExerciseVideoWidget` already handles controller lifecycle, scrubbing, playback speed (0.25x / 0.5x / 1.0x), and the error state, and resolves media through `ref.read(mediaUrlBuilderProvider)`. **Wrap it; do not reimplement it.**
+
+- [ ] **Step 7: Write the failing ExerciseVideo test**
+
+The interface is the point of this component, so the tests assert the interface, not the pixels:
+
+```dart
+testWidgets('takes a video id — there is no URL parameter to pass', (tester) async {
+  // Spec 5.5: if this component ever grows a url/src/host parameter, an agent
+  // can exfiltrate health data in a query string with no user interaction.
+  // This test is the tripwire for that regression.
+  const widget = ExerciseVideo(videoId: 412);
+  expect(widget.videoId, 412);
+  expect(
+    widget.toStringDeep(),
+    isNot(anyOf(contains('http'), contains('url'), contains('src'))),
+  );
+});
+
+testWidgets('an unknown video id renders a not-found state, not an exception', (tester) async {
+  await tester.pumpWidget(_host(const ExerciseVideo(videoId: 999999)));
+  await tester.pump();
+  expect(tester.takeException(), isNull);
+  expect(find.textContaining('not available'), findsOneWidget);
+});
+
+testWidgets('renders licence attribution whenever a video resolves', (tester) async {
+  // Spec 5.6: wger's exercise media is CC BY-SA. Attribution is a licence
+  // obligation and must not depend on the agent remembering to mention it.
+  await tester.pumpWidget(_host(_withFakeVideo(
+    const ExerciseVideo(videoId: 412),
+    licenseTitle: 'CC BY-SA 4.0',
+    licenseAuthor: 'Jane Doe',
+  )));
+  await tester.pump();
+
+  expect(find.textContaining('CC BY-SA 4.0'), findsOneWidget);
+  expect(find.textContaining('Jane Doe'), findsOneWidget);
+});
+
+testWidgets('attribution still renders when the author is null', (tester) async {
+  // Video.licenseAuthor is nullable on the server.
+  await tester.pumpWidget(_host(_withFakeVideo(
+    const ExerciseVideo(videoId: 412),
+    licenseTitle: 'CC BY-SA 4.0',
+    licenseAuthor: null,
+  )));
+  await tester.pump();
+
+  expect(tester.takeException(), isNull);
+  expect(find.textContaining('CC BY-SA 4.0'), findsOneWidget);
+});
+```
+
+Provide `_withFakeVideo` as a Riverpod `ProviderScope` override supplying a stub video lookup, so no network or database is touched.
+
+- [ ] **Step 8: Implement ExerciseVideo and register it**
+
+Look the video up by id, render `ExerciseVideoWidget` for the hit, and render attribution beneath it unconditionally. Register as a **read** component. Re-assert `writeComponents` is unchanged.
+
+- [ ] **Step 9: Run all catalog tests, analyze, and commit**
+
+Run: `flutter test test/features/ai/genui/`
+Expected: PASS
 
 ```bash
 flutter analyze
 git add lib/features/ai/genui/ test/features/ai/genui/
-git commit -m "feat(ai): add MetricChart, the one component the Basic Catalog lacks"
+git commit -m "feat(ai): add MetricChart and id-keyed ExerciseVideo components"
 ```
 
 ---
@@ -2809,7 +2906,7 @@ void main() {
       // Basic Catalog names plus OmniHealth's own.
       knownComponents: const {
         'Column', 'Row', 'Card', 'Text', 'Button', 'TextField', 'Slider',
-        'MetricChart', 'MetricEntryCard', 'ConfirmationCard',
+        'MetricChart', 'ExerciseVideo', 'MetricEntryCard', 'ConfirmationCard',
       },
       writeComponents: const {'MetricEntryCard', 'ConfirmationCard'},
       surfaceSink: surfaced.add,
@@ -2828,6 +2925,20 @@ void main() {
     expect(result.isError, isTrue);
     expect(result.message, contains('ArbitraryHtml'));
     expect(surfaced, isEmpty);
+  });
+
+  test('rejects the URL-taking Basic Catalog media components', () async {
+    // Spec 5.5. These are excluded from the catalog precisely because
+    // rendering one issues a GET to an agent-chosen host, with no tap and no
+    // trace in the transcript. ExerciseVideo replaces Video, keyed by id.
+    for (final banned in ['Image', 'Video', 'AudioPlayer']) {
+      final result = await tool.call({
+        'component': banned,
+        'props': {'url': 'https://attacker.example/p.png?w=82.4'},
+      });
+      expect(result.isError, isTrue, reason: '$banned must not render');
+      expect(surfaced, isEmpty, reason: '$banned must not reach a surface');
+    }
   });
 
   test('accepts a Basic Catalog component', () async {
@@ -2931,7 +3042,7 @@ Mint over the *resolved* argument values, not the declared template — spec §5
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `flutter test test/features/ai/genui/render_ui_tool_test.dart`
-Expected: PASS (7 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Analyze and commit**
 
@@ -3070,9 +3181,23 @@ void main() {
         'log_nutrition_entry',
         'get_workout_log',
         'get_body_measurements',
+        'search_exercises',
+        'get_exercise_detail',
         'render_ui',
       },
     );
+  });
+
+  test('no tool description or schema leaks a media URL', () {
+    // Spec 5.5: the agent must never learn a URL it could echo back into a
+    // render request.
+    final registry = ToolRegistry(tokenService: ConfirmationTokenService());
+    registerAiToolsForTest(registry);
+
+    for (final spec in registry.specs()) {
+      final encoded = jsonEncode({'d': spec.description, 's': spec.inputSchema});
+      expect(encoded, isNot(contains('http')), reason: '${spec.name} mentions a URL');
+    }
   });
 
   test('every tool declares a non-empty description and an object schema', () {
@@ -3276,7 +3401,7 @@ git commit -m "feat(ai): add desktop ACP agent backend over JSON-RPC stdio"
 
 ## Self-Review
 
-**Spec coverage.** §3 architecture → Tasks 1–18 file structure. §3.1 two-backend split → Tasks 9, 18. §4.1 providers → Tasks 1–3. §4.2 key store → Task 4. §4.3 tool registry → Tasks 6–8. §4.4 agent loop → Task 9. §4.5 A2UI surface → Tasks 10–12. §4.6 MCP bridge → Task 17. §4.7 ACP backend → Task 18. §5.1 catalog composition → Tasks 10–11. §5.2 write rule and honesty guarantee → Task 10 step 7 (`writeComponents`), Task 12 rule 2, Task 16 step 4. §5.3 render_ui and the suspend-and-return deviation → Task 12. §5.4 data binding → Task 12 step 3 (resolving paths before minting). §6.1 reference flow → Task 16. §6.2 confirmation tokens → Tasks 5, 6, 12, 16 step 3. §6.3 egress notice → Task 13 step 4. §6.4 ACP policy → Task 13 step 4, Task 3 doc comment. §7 error handling → Task 2 (provider errors), Task 6 (tool errors), Task 14 step 3 (malformed A2UI), Tasks 9 and 18 (cancellation, subprocess failure). §8 testing → every task.
+**Spec coverage.** §3 architecture → Tasks 1–18 file structure. §3.1 two-backend split → Tasks 9, 18. §4.1 providers → Tasks 1–3. §4.2 key store → Task 4. §4.3 tool registry → Tasks 6–8. §4.4 agent loop → Task 9. §4.5 A2UI surface → Tasks 10–12. §4.6 MCP bridge → Task 17. §4.7 ACP backend → Task 18. §5.1 catalog composition → Tasks 10–11. §5.2 write rule and honesty guarantee → Task 10 step 7 (`writeComponents`), Task 12 rule 2, Task 16 step 4. §5.3 render_ui and the suspend-and-return deviation → Task 12. §5.4 data binding → Task 12 step 3 (resolving paths before minting). §5.5 no agent-supplied URLs → Task 8 step 7 (tools return ids, tested), Task 11 steps 6–8 (`ExerciseVideo` keyed by id, tested), Task 12 (media components rejected, tested), Task 15 (no tool schema mentions a URL, tested). §5.6 CC attribution → Task 11 step 7, two tests including the null-author case. §6.1 reference flow → Task 16. §6.2 confirmation tokens → Tasks 5, 6, 12, 16 step 3. §6.3 egress notice → Task 13 step 4. §6.4 ACP policy → Task 13 step 4, Task 3 doc comment. §7 error handling → Task 2 (provider errors), Task 6 (tool errors), Task 14 step 3 (malformed A2UI), Tasks 9 and 18 (cancellation, subprocess failure). §8 testing → every task.
 
 **Known gaps, deliberate.** Spec §7's "in-flight tool calls complete or roll back" is only partially covered: Task 9 tests that cancellation stops the loop, but rollback of a partially-applied write is not implemented, because every Slice 1 write is a single Drift insert and therefore already atomic. Revisit when a tool performs multiple writes.
 
