@@ -78,8 +78,8 @@ for each question what was observed and what it implies. Slice 1 does not begin 
 
 ### 2.3 Fallback positions
 
-- If genui core is unusable: implement a minimal A2UI renderer for the §5 catalog only. This is
-  bounded work — the catalog is five components — and we retain protocol compatibility.
+- ~~If genui core is unusable: implement a minimal A2UI renderer ourselves.~~ **Not needed.** The
+  spike confirmed genui is backend-agnostic via `A2uiTransportAdapter`; see findings §1.
 - If a platform fails to build: proceed on the platforms that work; record the failure and treat the
   fix as separate work. macOS is the priority development target.
 - If REST gaps exist: implement the tools that are possible, document the gaps, and schedule a
@@ -169,7 +169,9 @@ The key itself is never stored in this record — only a reference into the key 
 ### 4.2 Key store — `lib/features/ai/credentials/`
 
 A thin wrapper over `flutter_secure_storage`, backed by iOS/macOS Keychain, Android Keystore, and
-Windows DPAPI.
+Windows DPAPI. The package is **already a wger dependency** (^10.3.1), and
+`core/network/secure_token_storage.dart` is the house pattern to mirror: an `abstract interface
+class`, a separate platform implementation, and a Riverpod `Provider` binding them.
 
 Invariants, each with a corresponding test:
 
@@ -192,19 +194,24 @@ abstract class Tool {
 
 The registry is the **only** surface an agent can invoke. Built-in tools for Slice 1:
 
-| Tool | Operation | wger endpoint |
+| Tool | Operation | Backed by |
 |---|---|---|
-| `get_weight_history` | read | `GET /api/v2/weightentry/` |
-| `log_weight` | write | `POST /api/v2/weightentry/` |
-| `get_nutrition_log` | read | `GET /api/v2/nutritiondiary/` |
-| `search_ingredient` | read | `GET /api/v2/ingredient/search/` |
-| `log_nutrition_entry` | write | `POST /api/v2/nutritiondiary/` |
-| `get_workout_log` | read | `GET /api/v2/workoutlog/` |
-| `get_body_measurements` | read | `GET /api/v2/measurement/` |
+| `get_weight_history` | read | `BodyWeightRepository.watchAllDrift()` |
+| `log_weight` | write | `WeightEntryNotifier.addEntry(...)` |
+| `get_nutrition_log` | read | `NutritionRepository.watchAllLogsHydrated()` |
+| `search_ingredient` | read | `IngredientRepository.search(...)` |
+| `log_nutrition_entry` | write | `NutritionRepository.addLogLocalDrift(...)` |
+| `get_workout_log` | read | `WorkoutLogsRepository` |
+| `get_body_measurements` | read | `MeasurementRepository` |
 | `render_ui` | UI | none — see §5.2 |
 
-Exact endpoint shapes are confirmed by the Slice 0 spike (§2.1 question 3); the table above is the
-target, and any gap found becomes a documented deviation.
+**Tools call wger's existing repositories, not its REST API.** The Slice 0 spike established that
+wger's Flutter app is local-first: feature repositories write to a local Drift database and
+PowerSync replicates to the server. Every domain Slice 1 touches is PowerSync-backed. Three
+consequences follow: tools work offline, writes are reactive (logging a weight updates the weight
+screen live through its existing Drift stream), and the tool layer carries no HTTP plumbing.
+
+See [2026-08-07-slice-0-findings.md](2026-08-07-slice-0-findings.md) §3.
 
 All arguments are validated against `inputSchema` before `call()` executes. A schema violation
 returns a `ToolResult.error` describing the violation — it does not throw, because the error is
@@ -343,8 +350,9 @@ Documented in the repository and surfaced in the ACP configuration screen:
 | **Cancellation** | Every turn is cancellable mid-stream. In-flight tool calls either complete or roll back; a cancelled turn never leaves a half-write. |
 | **ACP subprocess failure** — binary missing, crash, protocol violation, hang | Session ends with a clear message naming the cause. The subprocess is reaped; no orphans. A protocol violation disables the session rather than retrying blindly. |
 
-Offline behavior: chat reports unavailability plainly. All existing wger tracking continues to work
-exactly as it does upstream.
+Offline behavior: only the *provider call* requires network. Because tools run against local Drift
+(§4.3), every read and write tool remains fully functional offline — a queued turn replays cleanly
+once connectivity returns. All existing wger tracking continues to work exactly as it does upstream.
 
 ---
 
