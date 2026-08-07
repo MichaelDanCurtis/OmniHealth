@@ -1,0 +1,42 @@
+name: Analyze
+on:
+  push:
+    paths:
+      - '**.dart'
+      - 'pubspec.yaml'
+      - 'analysis_options.yaml'
+      - 'lib/l10n/**'
+      - 'ios/Runner/Info.plist'
+      - 'android/app/src/main/res/xml/locales_config.xml'
+  pull_request:
+    branches: [ master, ]
+    paths:
+      - '**/*.dart'
+      - 'pubspec.yaml'
+      - 'analysis_options.yaml'
+      - 'lib/l10n/**'
+      - 'ios/Runner/Info.plist'
+      - 'android/app/src/main/res/xml/locales_config.xml'
+      - '.github/actions/flutter-common/action.yml'
+      - '.github/workflows/analyze.yml'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Run analyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Common flutter setup
+        uses: ./.github/actions/flutter-common
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Check locale lists are in sync
+        run: dart run tool/check_locales.dart
