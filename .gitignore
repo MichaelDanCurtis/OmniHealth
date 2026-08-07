@@ -1,0 +1,6 @@
+# agent tooling state
+.omc/
+.claude/
+
+# macOS
+.DS_Store
