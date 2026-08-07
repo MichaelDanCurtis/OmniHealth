@@ -1,89 +1,72 @@
-# Mobile app for wger
+# OmniHealth
 
-wger is a free, open-source flutter application that manages and tracks/logs
-your exercises and personal workouts, weight, and diet plans. This is the mobile
-app written with Flutter, it talks via REST with the main server.
+An AI-native health app for iOS, Android, macOS, and Windows.
 
-If you want to contribute, hop on the Discord server and say hi!
+OmniHealth is a fork of [wger-project/flutter](https://github.com/wger-project/flutter) that adds an
+on-device AI assistant able to read and write your health data through generative UI — you say
+"I want to log my weight", a native card appears in the chat, you fill it in and tap save.
 
+Licensed **AGPL-3.0-or-later**, same as wger.
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/wger-project/flutter/master/fastlane/metadata/android/en-US/images/phoneScreenshots/01%20-%20dashboard.png" width="200" alt="" />
+## Status
 
-<img src="https://raw.githubusercontent.com/wger-project/flutter/master/fastlane/metadata/android/en-US/images/phoneScreenshots/04%20-%20measurements.png" width="200" alt="" />
+Early. The design and implementation plan are written; the AI layer is being built.
 
-<img src="https://raw.githubusercontent.com/wger-project/flutter/master/fastlane/metadata/android/en-US/images/phoneScreenshots/05%20-%20nutritional%20plan.png" width="200" alt="" />
-</p>
+- [Design spec](docs/superpowers/specs/2026-08-07-omnihealth-ai-spine-design.md)
+- [Fork evaluation findings](docs/superpowers/specs/2026-08-07-slice-0-findings.md)
+- [Implementation plan](docs/superpowers/plans/2026-08-07-omnihealth-ai-spine.md)
 
-## Installation
+## How this fork is organised
 
-[<img src="https://raw.githubusercontent.com/wger-project/wger/refs/heads/master/wger/core/static/images/logos/play-store/badge.svg"
-alt="Get it on Google Play"
-height="55">](https://play.google.com/store/apps/details?id=de.wger.flutter)
-[<img src="https://raw.githubusercontent.com/wger-project/wger/refs/heads/master/wger/core/static/images/logos/fdroid/get-it-on.svg"
-alt="Get it on F-Droid"
-height="55">](https://f-droid.org/packages/de.wger.flutter/)
-[<img src="https://raw.githubusercontent.com/wger-project/wger/refs/heads/master/wger/core/static/images/logos/app-store/black.svg"
-alt="Download on the App Store"
-height="55">](https://apps.apple.com/us/app/wger-workout-manager/id6502226792)
-[<img src="https://raw.githubusercontent.com/wger-project/wger/refs/heads/master/wger/core/static/images/logos/flathub/black.svg"
-alt="Get it on Flathub"
-height="55">](https://flathub.org/apps/de.wger.flutter)
+Everything OmniHealth adds lives in **`lib/features/ai/`**. Outside that directory the tree is
+wger's, and changes to it are limited to a navigation entry and a Riverpod registration. Two reasons:
+merges from upstream stay cheap, and the AI layer could be offered back to wger as an optional
+feature rather than living forever in a divergent fork.
 
-## Developing and contributing
-
-Our goal is to build an awesome and flexible fitness and nutrition manager,
-along with a comprehensive list of exercises and ingredients, all released
-under a free license.
-
-For this, we’d love your help! Whether it’s code, translations, exercises or
-reporting issues and ideas, check out our
-[contribution guide](https://wger.readthedocs.io/en/latest/contributing.html)
-to get started.
-
-A huge thank you to everyone who has contributed so far! ❤️ See the full list
-in [AUTHORS.md](AUTHORS.md).
-
-**TLDR**
+Upstream is tracked as a git remote:
 
 ```bash
-flutter run
+git fetch upstream
+git merge upstream/master
 ```
 
-This is a regular flutter application, so there's no magic. You will need a backend
-for this, so feel free to use the test server for this (the db is reset daily):
+## Bring your own key
 
-* URL: `https://dev.wger.de`
-* username: `user`
-* password: `flutteruser`
+OmniHealth has no server of its own and no subscription. You supply an API key for a provider you
+choose, and it is stored in your device's secure keychain — it never leaves the device except in the
+request to that provider.
 
-## Translation
+Supported providers: OpenAI, Grok, Kimi, and GLM through one OpenAI-compatible adapter, plus
+Anthropic through its own. On desktop you can alternatively point OmniHealth at a local
+[ACP](https://agentclientprotocol.com) agent binary you already run.
 
-Translate the app to your language on [Weblate](https://hosted.weblate.org/engage/wger/).
+**Provider API keys only.** OmniHealth does not support signing in with a consumer AI subscription
+from any vendor. Several vendors — Anthropic explicitly — restrict subscription credentials to their
+own first-party applications and enforce that server-side, so wiring a subscription into a
+third-party app risks the user's account. If you want to use Claude, use a Console API key.
 
-[![translation status](https://hosted.weblate.org/widgets/wger/-/mobile/multi-blue.svg)](https://hosted.weblate.org/engage/wger/)
+## Your data
 
-## Contact
+Health data is yours. It syncs to whichever wger server you point the app at — your own, or a public
+one — using wger's existing PowerSync setup, and it works offline.
 
-Feel free to get in touch if you found this useful or if something didn't behave
-as expected. We can't fix what we don't know about, so please report liberally.
-If you're not sure if something is a bug or not, feel free to file a bug anyway.
+The AI is the one place data leaves that boundary: your conversation and any tool results are sent to
+the provider you configured. The app tells you which provider that is before you enter a key. If
+that is not a trade you want to make, the app works fine with the AI features switched off.
 
-* **Discord:** <https://discord.gg/rPWFv6W>
-* **Issue tracker:** <https://github.com/wger-project/flutter/issues>
-* **Mastodon:** <https://fosstodon.org/@wger>
+### Nothing writes without a tap
 
-## License
+The assistant proposes UI; only you cause a write. When it wants to record something it must render
+a card, and only your tap on that card mints the single-use token its write is checked against. This
+is enforced in code, not in the prompt.
 
-The application is licensed under the GNU Affero General Public License 3 or later
-(AGPL 3+) with an app store exception.
+## Not a medical device
 
-As additional permission under section 7, you are allowed to distribute the
-software through an app store, even if that store has restrictive terms and
-conditions that are incompatible with the AGPL, provided that the source is also
-available under the AGPL with or without this permission through a channel without
-those restrictive terms and conditions.
+OmniHealth does not diagnose, treat, or give medical advice, and nothing it says should be taken as
+such. Talk to a clinician.
 
-The initial exercise and ingredient data is licensed additionally under one of
-the Creative Commons licenses, see the individual exercises for more details.
+## Credits
 
+Built on the work of the [wger](https://github.com/wger-project) team, who wrote nearly all of the
+tracking application this forks. Generative UI uses [A2UI](https://github.com/google/A2UI) via
+Flutter's [genui](https://github.com/flutter/genui) SDK.
