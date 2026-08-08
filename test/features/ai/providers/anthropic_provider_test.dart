@@ -97,7 +97,7 @@ void main() {
     final body = jsonDecode((capture.single as http.Request).body) as Map<String, dynamic>;
     expect(body['system'], 'You are helpful.');
     // The system turn must not also appear in messages — Anthropic rejects it.
-    expect((body['messages'] as List), hasLength(1));
+    expect(body['messages'] as List, hasLength(1));
     expect(((body['messages'] as List).single as Map)['role'], 'user');
   });
 
