@@ -28,7 +28,7 @@
 - **Interfaces use `abstract interface class`**, with the concrete implementation as a separate class and a Riverpod `Provider` binding them — mirroring `lib/core/network/secure_token_storage.dart`.
 - **Notifiers use** `@riverpod final class X extends _$X` with a `part 'x.g.dart';` directive. Run `dart run build_runner build --delete-conflicting-outputs` after adding or changing any annotated class.
 - **Dart SDK constraint** stays `>=3.10.0 <4.0.0`. Do not raise it.
-- **Run `flutter analyze` before every commit.** The baseline is zero issues; keep it there.
+- **Run `flutter analyze` before every commit.** The baseline is zero issues; keep it there. If you pipe it (`flutter analyze | tail -2 && git commit ...`) the pipeline's exit code is `tail`'s, so a failing analyze still commits. Use `set -o pipefail`, or don't pipe. This has already caused one bad commit on this repo.
 - Commit after every task. Use Conventional Commits (`feat:`, `test:`, `fix:`, `chore:`).
 
 ---
