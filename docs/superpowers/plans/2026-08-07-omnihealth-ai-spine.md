@@ -16,8 +16,15 @@
 | Task | Status |
 |---|---|
 | 0 — Establish the fork | **Done** — `8732988`. Analyze clean, macOS + iOS build. |
-| 1 — Provider contract + guard test | **Done** — 6 tests pass, analyze clean. |
-| 2–18 | Not started |
+| 1 — Provider contract + guard test | **Done** — 6 tests |
+| 2 — OpenAI-compatible provider | **Done** — 10 tests |
+| 3 — Anthropic provider | **Done** — 10 tests |
+| 4 — API key storage | **Done** — 6 tests |
+| 5 — Confirmation tokens | **Done** — 11 tests |
+| 6 — Tool registry | Next |
+| 7–18 | Not started |
+
+43 tests passing, `flutter analyze` clean. No packages added beyond `crypto`.
 
 ## Global Constraints
 
