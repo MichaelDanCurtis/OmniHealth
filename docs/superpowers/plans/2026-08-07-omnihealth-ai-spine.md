@@ -27,21 +27,51 @@
 | 9 — Local agent backend | **Done** — 10 tests |
 | 10 — A2UI catalog | **Done** — 24 tests |
 | 11 — MetricChart + ExerciseVideo | **Done** — 12 tests |
-| 12 — render_ui tool | **Done** — 14 tests |
-| 17 — MCP bridge | **Done** — 13 tests (taken early: self-contained, no device needed) |
-| 13 — Settings screen | Next |
-| 14 — Chat screen | Not started |
-| 15 — Wire module into app | Not started |
-| 16 — Acceptance tests | Not started |
-| 18 — ACP backend | Not started |
+| 12 — render_ui tool | **Done** — 15 tests |
+| 13 — Settings screen | **Done** — 23 tests |
+| 14 — Chat screen | **Done** — 25 tests |
+| 15 — Wire module into app | **Done** — 6 tests |
+| 16 — Acceptance tests | **Done** — 6 tests |
+| 17 — MCP bridge | **Done** — 13 tests |
+| 18 — ACP backend | **Done** — 21 tests |
 
-**176 tests passing, `flutter analyze` clean.** Packages added: `crypto`,
-`json_schema_builder`, `genui`.
+## Slice 1 complete
 
-Everything that can be built and verified without a UI, a device, or a running
-server is now done. The remainder is the Flutter UI layer (13–14), app wiring
-(15), and the two tasks with external dependencies: acceptance tests need a
-Dockerised wger, and the ACP backend spawns subprocesses.
+**258 tests passing, `flutter analyze` clean, macOS and iOS both build.**
+Packages added: `crypto`, `json_schema_builder`, `genui`.
+
+The module boundary held: the entire slice touches **6 lines outside
+`lib/features/ai/`** — two imports and two route entries in `main.dart`.
+
+### Deviations from this plan, and why
+
+- **Task 16** was specced against a Dockerised wger. The tools take callbacks,
+  so the acceptance tests run against an in-memory store instead — no external
+  dependency, no flake, runs in CI.
+- **Task 18** was specced to spawn a real subprocess. `Platform.resolvedExecutable`
+  under `flutter test` is not the `dart` binary, and the suite took minutes. The
+  process is injected behind an `AgentProcess` interface; behaviour is tested
+  in-memory in milliseconds.
+- **Tasks 13–14** use plain Riverpod notifiers rather than `@riverpod` codegen.
+  `build_runner` would regenerate `.g.dart` across all 379 of wger's files.
+- **`get_workout_log`** requires an `exerciseId`; wger's repository has no
+  cross-exercise query and adding one would breach the module boundary.
+
+### Carried forward
+
+1. **Composition (slice 1b).** `render_ui` takes one component plus props, which
+   cannot express a `Column` with children. The "primitives gather, our
+   components commit" design in spec §5.1 assumes A2UI's adjacency list. Today
+   the chat renders our four components directly and shows a visible fallback
+   for anything else, so the weight demo works but a composed form does not.
+   Closing this means `render_ui` accepting a full A2UI document and handing it
+   to genui's `SurfaceController`.
+2. **`aiToolBindingsProvider` and `exerciseVideoLookupProvider` still default to
+   stubs.** Both need overriding with Drift-backed lookups before the assistant
+   sees real data in a running app. Deliberately graceful: an unwired build
+   talks but finds nothing, rather than throwing.
+3. **Android and Windows unverified** — no Android SDK on this host, and Windows
+   cannot build from macOS.
 
 ### Carried into Task 15
 
