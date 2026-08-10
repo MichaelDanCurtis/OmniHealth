@@ -47,6 +47,8 @@ import 'package:wger/core/update_server_screen.dart';
 import 'package:wger/core/widgets/about.dart';
 import 'package:wger/core/widgets/log_overview.dart';
 import 'package:wger/features/account/widgets/settings.dart';
+import 'package:wger/features/ai/chat/screens/chat_screen.dart';
+import 'package:wger/features/ai/settings/screens/ai_settings_screen.dart';
 import 'package:wger/features/auth/screens/auth_screen.dart';
 import 'package:wger/features/auth/screens/auto_login_error_screen.dart';
 import 'package:wger/features/exercises/screens/add_exercise_screen.dart';
@@ -249,6 +251,10 @@ class MainApp extends ConsumerWidget {
               locale: userLocale,
               home: _getHomeScreen(authState),
               routes: {
+                // OmniHealth: the AI module's only two entry points. Everything
+                // else it adds lives under lib/features/ai/.
+                ChatScreen.routeName: (ctx) => const ChatScreen(),
+                AiSettingsScreen.routeName: (ctx) => const AiSettingsScreen(),
                 DashboardScreen.routeName: (ctx) => const DashboardScreen(),
                 FormScreen.routeName: (ctx) => const FormScreen(),
                 GalleryScreen.routeName: (ctx) => const GalleryScreen(),
