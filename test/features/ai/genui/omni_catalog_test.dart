@@ -36,6 +36,20 @@ void main() {
       );
     });
 
+    test('includes OmniHealth’s own read components', () {
+      // MetricChart because the Basic Catalog has no chart; ExerciseVideo
+      // because its Video takes a URL and §5.5 forbids that.
+      expect(
+        OmniCatalog.knownComponentNames,
+        containsAll(['MetricChart', 'ExerciseVideo']),
+      );
+    });
+
+    test('adding read components did not widen the write surface', () {
+      expect(OmniCatalog.writeComponents, isNot(contains('MetricChart')));
+      expect(OmniCatalog.writeComponents, isNot(contains('ExerciseVideo')));
+    });
+
     test('a name in neither set is absent', () {
       expect(OmniCatalog.knownComponentNames, isNot(contains('ArbitraryHtml')));
     });

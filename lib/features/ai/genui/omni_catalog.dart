@@ -19,6 +19,8 @@
 import 'package:genui/genui.dart';
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:wger/features/ai/genui/widgets/confirmation_card.dart';
+import 'package:wger/features/ai/genui/widgets/exercise_video.dart';
+import 'package:wger/features/ai/genui/widgets/metric_chart.dart';
 import 'package:wger/features/ai/genui/widgets/metric_entry_card.dart';
 
 /// The set of components the agent may render, and the rules that govern them.
@@ -146,8 +148,82 @@ one.''';
     },
   );
 
-  /// OmniHealth's own components. Read components are added by later tasks.
-  static List<CatalogItem> get omniItems => [metricEntryCard, confirmationCard];
+  static final _metricChartSchema = S.object(
+    description:
+        'A trend line over a series of dated values. Use to show progress over '
+        'time, e.g. body weight across weeks.',
+    properties: {
+      'label': S.string(description: 'What the series measures, e.g. "Weight".'),
+      'unit': S.string(description: 'Unit of the values, e.g. "kg".'),
+      'series': S.list(
+        description: 'The points to plot.',
+        items: S.object(
+          properties: {
+            'date': S.string(description: 'YYYY-MM-DD.'),
+            'value': S.number(description: 'The measured value.'),
+          },
+          required: ['date', 'value'],
+        ),
+      ),
+    },
+    required: ['unit', 'series'],
+  );
+
+  static final _exerciseVideoSchema = S.object(
+    description:
+        'Plays a form video for an exercise. Takes a video id from '
+        'get_exercise_detail. There is no URL parameter and never will be.',
+    properties: {
+      'videoId': S.integer(description: 'Video id from get_exercise_detail.'),
+    },
+    required: ['videoId'],
+  );
+
+  static final metricChart = CatalogItem(
+    name: 'MetricChart',
+    dataSchema: _metricChartSchema,
+    widgetBuilder: (itemContext) {
+      final data = itemContext.data as JsonMap;
+      final rawSeries = (data['series'] as List?) ?? const [];
+
+      final points = <MetricPoint>[];
+      for (final raw in rawSeries) {
+        if (raw is! Map) {
+          continue;
+        }
+        final date = DateTime.tryParse('${raw['date']}');
+        final value = (raw['value'] as num?)?.toDouble();
+        // Skip malformed points rather than failing the whole surface — a
+        // partly-plottable series still tells the user something.
+        if (date != null && value != null) {
+          points.add(MetricPoint(date: date, value: value));
+        }
+      }
+
+      return MetricChart(
+        series: points,
+        unit: data['unit'] as String? ?? '',
+        label: data['label'] as String?,
+      );
+    },
+  );
+
+  static final exerciseVideo = CatalogItem(
+    name: 'ExerciseVideo',
+    dataSchema: _exerciseVideoSchema,
+    widgetBuilder: (itemContext) {
+      final data = itemContext.data as JsonMap;
+      return ExerciseVideo(videoId: (data['videoId'] as num).toInt());
+    },
+  );
+
+  /// OmniHealth's own components: two reads, two writes.
+  static List<CatalogItem> get omniItems => [
+    metricChart,
+    exerciseVideo,
+    metricEntryCard,
+    confirmationCard,
+  ];
 
   /// The catalog the renderer is given.
   static Catalog build() {
