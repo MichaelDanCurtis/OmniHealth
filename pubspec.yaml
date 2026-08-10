@@ -76,6 +76,7 @@ dependencies:
   powersync: ^2.3.3
   crypto: ^3.0.7
   json_schema_builder: ^0.1.6
+  genui: ^0.10.1
 
 dev_dependencies:
   flutter_test:

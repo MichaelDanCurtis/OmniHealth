@@ -21,10 +21,15 @@
 | 3 — Anthropic provider | **Done** — 10 tests |
 | 4 — API key storage | **Done** — 6 tests |
 | 5 — Confirmation tokens | **Done** — 11 tests |
-| 6 — Tool registry | Next |
-| 7–18 | Not started |
+| 6 — Tool registry | **Done** — 14 tests |
+| 7 — Weight tools | **Done** — 14 tests |
+| 8 — Nutrition, body, exercise tools | **Done** — 36 tests |
+| 9 — Local agent backend | **Done** — 10 tests |
+| 10 — A2UI catalog | Next — genui 0.10.1 installed and verified |
+| 11–18 | Not started |
 
-43 tests passing, `flutter analyze` clean. No packages added beyond `crypto`.
+**111 tests passing, `flutter analyze` clean.** Tasks 0–9 complete: the whole
+non-UI half of slice 1. Packages added: `crypto`, `json_schema_builder`, `genui`.
 
 ## Global Constraints
 
@@ -2666,7 +2671,20 @@ Same shape. Tests assert: the summary text renders; tapping accept fires `onAcce
 
 - [ ] **Step 7: Wire the catalog using the real genui API from Step 1**
 
-Create `omni_catalog.dart` composing **A2UI's Basic Catalog plus OmniHealth's own components**. Per spec §5.1 we adopt the Basic Catalog wholesale (`Column`, `Row`, `List`, `Card`, `Tabs`, `Divider`, `Modal`, `Text`, `Image`, `Icon`, `Video`, `AudioPlayer`, `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `ChoicePicker`, `Slider`) — genui provides it, so this is registration, not implementation.
+Create `omni_catalog.dart` composing **A2UI's Basic Catalog minus its media items, plus OmniHealth's own**.
+
+genui 0.10.1 already provides exactly this. `BasicCatalogItems.asNoAssetCatalog()` returns the Basic Catalog with `[audioPlayer, image, video]` removed — the same three spec §5.5 excludes, arrived at independently (genui's stated reason is that they "require additional data"; ours is silent egress). Use it rather than hand-listing items:
+
+```dart
+final base = BasicCatalogItems.asNoAssetCatalog(
+  systemPromptFragments: [omniCatalogRules],
+);
+// then add MetricChart, ExerciseVideo, MetricEntryCard, ConfirmationCard
+```
+
+Two things worth knowing about the real API:
+- `Catalog(items, {functions, catalogId, systemPromptFragments})` — `systemPromptFragments` lets the catalog contribute its own prompt rules. Use it to state the render-then-confirm flow, so the rule travels with the catalog instead of living in a system prompt someone edits later.
+- `Catalog.copyWithout(itemsToRemove: [...])` exists, which is how `asNoAssetCatalog` is built. A test should assert `image`, `video`, and `audioPlayer` are absent from our final catalog — relying on `asNoAssetCatalog`'s current behaviour without pinning it would let an upstream change silently re-add them.
 
 Add `OmniCatalog.writeComponents`, a constant set naming only the components permitted to mint confirmation tokens. After this task it contains `MetricEntryCard` and `ConfirmationCard`.
 
