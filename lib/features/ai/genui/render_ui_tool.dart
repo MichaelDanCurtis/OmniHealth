@@ -30,18 +30,18 @@ class SurfaceRequest {
   final String component;
   final Map<String, dynamic> props;
 
-  final Completer<_SurfaceOutcome> _completer = Completer<_SurfaceOutcome>();
+  final Completer<SurfaceOutcome> _completer = Completer<SurfaceOutcome>();
 
   SurfaceRequest({required this.component, required this.props});
 
-  Future<_SurfaceOutcome> get outcome => _completer.future;
+  Future<SurfaceOutcome> get outcome => _completer.future;
 
   /// The user submitted, with [values] being what they actually entered.
   void complete(Map<String, dynamic> values) {
     if (_completer.isCompleted) {
       return;
     }
-    _completer.complete(_SurfaceOutcome(submitted: true, values: values));
+    _completer.complete(SurfaceOutcome(submitted: true, values: values));
   }
 
   /// The user dismissed the surface. Mints nothing, ever.
@@ -49,15 +49,15 @@ class SurfaceRequest {
     if (_completer.isCompleted) {
       return;
     }
-    _completer.complete(const _SurfaceOutcome(submitted: false, values: {}));
+    _completer.complete(const SurfaceOutcome(submitted: false, values: {}));
   }
 }
 
-class _SurfaceOutcome {
+class SurfaceOutcome {
   final bool submitted;
   final Map<String, dynamic> values;
 
-  const _SurfaceOutcome({required this.submitted, required this.values});
+  const SurfaceOutcome({required this.submitted, required this.values});
 }
 
 /// Renders a component from the catalog and waits for the user to act.
@@ -149,6 +149,13 @@ class RenderUiTool implements Tool {
       props: (args['props'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
     surfaceSink(request);
+
+    // Only write components have something to wait for. A MetricChart has no
+    // control to tap, so suspending on one would hang the turn forever — the
+    // agent could never say anything after drawing a graph.
+    if (!writeComponents.contains(component)) {
+      return ToolResult.ok({'action': 'rendered'});
+    }
 
     final outcome = await request.outcome;
 

@@ -108,38 +108,45 @@ void main() {
     test('a Basic Catalog component mints no token even when it declares an intent', () async {
       // The case spec 5.2 exists to prevent: a raw Button carrying a write
       // intent and labelled however the agent likes.
-      final future = tool.call({
+      final data = (await tool.call({
         'component': 'Button',
         'props': {'text': 'Cancel'},
         'intent': {
           'tool': 'log_weight',
           'arguments': {'value': 999.0},
         },
-      });
+      })).data! as Map<String, dynamic>;
 
-      await Future<void>.delayed(Duration.zero);
-      surfaced.single.complete({'tapped': true});
-
-      final data = (await future).data! as Map<String, dynamic>;
-      expect(data['action'], 'submit');
+      // A Button is not a write component, so it neither suspends nor mints.
+      // The registry then rejects any write it was aiming at.
       expect(data.containsKey('confirmationToken'), isFalse);
     });
 
     test('a read component mints no token', () async {
-      final future = tool.call({
+      final data = (await tool.call({
         'component': 'MetricChart',
         'props': {'unit': 'kg', 'series': <dynamic>[]},
         'intent': {
           'tool': 'log_weight',
           'arguments': {'value': 1.0},
         },
-      });
+      })).data! as Map<String, dynamic>;
 
-      await Future<void>.delayed(Duration.zero);
-      surfaced.single.complete({});
-
-      final data = (await future).data! as Map<String, dynamic>;
       expect(data.containsKey('confirmationToken'), isFalse);
+    });
+
+    test('a read component renders without suspending', () async {
+      // A MetricChart has no control to tap. Waiting on one would hang the
+      // turn forever — the agent could never speak again after drawing a graph.
+      final result = await tool
+          .call({
+            'component': 'MetricChart',
+            'props': {'unit': 'kg', 'series': <dynamic>[]},
+          })
+          .timeout(const Duration(seconds: 1));
+
+      expect((result.data! as Map<String, dynamic>)['action'], 'rendered');
+      expect(surfaced, hasLength(1), reason: 'it must still be drawn');
     });
 
     test('dismissal returns no token at all', () async {
