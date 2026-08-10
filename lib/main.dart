@@ -47,7 +47,10 @@ import 'package:wger/core/update_server_screen.dart';
 import 'package:wger/core/widgets/about.dart';
 import 'package:wger/core/widgets/log_overview.dart';
 import 'package:wger/features/account/widgets/settings.dart';
+import 'package:wger/features/ai/ai_bindings.dart';
+import 'package:wger/features/ai/ai_module.dart';
 import 'package:wger/features/ai/chat/screens/chat_screen.dart';
+import 'package:wger/features/ai/genui/widgets/exercise_video.dart';
 import 'package:wger/features/ai/settings/screens/ai_settings_screen.dart';
 import 'package:wger/features/auth/screens/auth_screen.dart';
 import 'package:wger/features/auth/screens/auto_login_error_screen.dart';
@@ -162,7 +165,18 @@ void main() async {
   );
 
   // Application
-  runApp(const ProviderScope(child: MainApp()));
+  runApp(
+    ProviderScope(
+      // OmniHealth: binds the AI tools to wger's repositories. Both providers
+      // ship stubbed so the module builds standalone; these are the only place
+      // they are pointed at real data.
+      overrides: [
+        aiToolBindingsProvider.overrideWith(buildAiToolBindings),
+        exerciseVideoLookupProvider.overrideWith(buildExerciseVideoLookup),
+      ],
+      child: const MainApp(),
+    ),
+  );
 }
 
 class MainApp extends ConsumerWidget {
