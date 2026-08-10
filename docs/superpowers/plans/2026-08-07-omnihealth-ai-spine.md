@@ -59,19 +59,22 @@ The module boundary held: the entire slice touches **6 lines outside
 
 ### Carried forward
 
-1. **Composition (slice 1b).** `render_ui` takes one component plus props, which
-   cannot express a `Column` with children. The "primitives gather, our
-   components commit" design in spec §5.1 assumes A2UI's adjacency list. Today
-   the chat renders our four components directly and shows a visible fallback
-   for anything else, so the weight demo works but a composed form does not.
-   Closing this means `render_ui` accepting a full A2UI document and handing it
-   to genui's `SurfaceController`.
-2. **`aiToolBindingsProvider` and `exerciseVideoLookupProvider` still default to
-   stubs.** Both need overriding with Drift-backed lookups before the assistant
-   sees real data in a running app. Deliberately graceful: an unwired build
-   talks but finds nothing, rather than throwing.
+1. **Composition — now fully specified.** See
+   [2026-08-10-slice-1b-a2ui-composition.md](../specs/2026-08-10-slice-1b-a2ui-composition.md).
+   All genui API discovery is done and recorded there, including two constraints
+   found by reading the implementation (a `Surface` needs a `root` component or
+   it fails invisibly) and the delicate part (token minting must key off the
+   component that raised the action, not the document root).
+2. ~~The two provider seams default to stubs.~~ **Done** — `ai_bindings.dart`
+   binds both to wger's Drift repositories, applied at `main.dart`'s
+   `ProviderScope`. Compile-time verified and the app builds; no test proves the
+   bindings return real rows, which needs a database and a running wger.
 3. **Android and Windows unverified** — no Android SDK on this host, and Windows
    cannot build from macOS.
+4. **The app has never been run.** Everything is verified by unit and widget
+   tests plus a macOS/iOS build. Nobody has yet launched it, logged into a wger
+   server, entered an API key, and talked to the assistant. That is the largest
+   remaining unknown, and no amount of the current test style closes it.
 
 ### Carried into Task 15
 
