@@ -25,11 +25,22 @@
 | 7 — Weight tools | **Done** — 14 tests |
 | 8 — Nutrition, body, exercise tools | **Done** — 36 tests |
 | 9 — Local agent backend | **Done** — 10 tests |
-| 10 — A2UI catalog | Next — genui 0.10.1 installed and verified |
-| 11–18 | Not started |
+| 10 — A2UI catalog | **Done** — 24 tests |
+| 11 — MetricChart + ExerciseVideo | **Done** — 12 tests |
+| 12 — render_ui tool | Next |
+| 13–18 | Not started |
 
-**111 tests passing, `flutter analyze` clean.** Tasks 0–9 complete: the whole
-non-UI half of slice 1. Packages added: `crypto`, `json_schema_builder`, `genui`.
+**149 tests passing, `flutter analyze` clean.** Packages added: `crypto`,
+`json_schema_builder`, `genui`.
+
+### Carried into Task 15
+
+`exerciseVideoLookupProvider` (in `genui/widgets/exercise_video.dart`) is a seam
+that currently defaults to returning null, so an unwired build shows "not
+available" rather than throwing. Task 15 must override it with the real
+Drift-backed lookup, and add a test that a known video id resolves through the
+wired provider. Until then `ExerciseVideo` renders its not-found state in the
+running app even for valid ids.
 
 ## Global Constraints
 
