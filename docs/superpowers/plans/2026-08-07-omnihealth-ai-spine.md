@@ -27,11 +27,21 @@
 | 9 — Local agent backend | **Done** — 10 tests |
 | 10 — A2UI catalog | **Done** — 24 tests |
 | 11 — MetricChart + ExerciseVideo | **Done** — 12 tests |
-| 12 — render_ui tool | Next |
-| 13–18 | Not started |
+| 12 — render_ui tool | **Done** — 14 tests |
+| 17 — MCP bridge | **Done** — 13 tests (taken early: self-contained, no device needed) |
+| 13 — Settings screen | Next |
+| 14 — Chat screen | Not started |
+| 15 — Wire module into app | Not started |
+| 16 — Acceptance tests | Not started |
+| 18 — ACP backend | Not started |
 
-**149 tests passing, `flutter analyze` clean.** Packages added: `crypto`,
+**176 tests passing, `flutter analyze` clean.** Packages added: `crypto`,
 `json_schema_builder`, `genui`.
+
+Everything that can be built and verified without a UI, a device, or a running
+server is now done. The remainder is the Flutter UI layer (13–14), app wiring
+(15), and the two tasks with external dependencies: acceptance tests need a
+Dockerised wger, and the ACP backend spawns subprocesses.
 
 ### Carried into Task 15
 
